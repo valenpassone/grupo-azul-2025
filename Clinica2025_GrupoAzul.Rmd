@@ -1,0 +1,62 @@
+---
+title: "Clinica de Datos 2025"
+author: "Grupo Azul"
+date: "2025"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+```
+
+
+##Descargamos bases 2010
+
+```{r setup, include=FALSE}
+
+identificador <- read.csv("Bases/Censo 2022-2010/Censo2010_2022_conversion.csv", stringsAsFactors = TRUE, sep ="," )
+
+cod_prov2010 <- read.csv("Bases/Censo 2022-2010/Censo2010_CodigoProv.csv", stringsAsFactors = TRUE, sep ="," )
+
+defcuali_2010 <- read.csv("Bases/Censo 2022-2010/Censo2010_Hog_Deficit_Cuali.csv", stringsAsFactors = TRUE, sep ="," )
+
+hac_2010 <- read.csv("Bases/Censo 2022-2010/Censo2010_Hogares_Hac.csv", stringsAsFactors = TRUE, sep ="," )
+
+viv_habitadas_2010 <- read.csv("Bases/Censo 2022-2010/Censo2010_Viv_Habitadas.csv", stringsAsFactors = TRUE, sep ="," )
+
+pob_viv_hog_2010 <- read.csv("Bases/Censo 2022-2010/Censo2010_Pob_Viv_Hog.csv", stringsAsFactors = TRUE, sep ="," )
+
+```
+
+## Descargamos bases 2022
+
+```{r}
+cod_prov2022 <- read.csv("Bases/Censo 2022-2010/Censo2022_CodigoProv.csv", stringsAsFactors = TRUE, sep ="," )
+
+defcuali_2022 <- read.csv("Bases/Censo 2022-2010/Censo2022_Hog_Deficit_Cuali.csv", stringsAsFactors = TRUE, sep ="," )
+
+hac_2022 <- read.csv("Bases/Censo 2022-2010/Censo2022_Hogares_Hac.csv", stringsAsFactors = TRUE, sep ="," )
+
+viv_habitadas_2022 <- read.csv("Bases/Censo 2022-2010/Censo2022_Viv_Habitadas.csv", stringsAsFactors = TRUE, sep ="," )
+
+pob_viv_hog_2022 <- read.csv("Bases/Censo 2022-2010/Censo2022_Pob_Viv_Hog.csv", stringsAsFactors = TRUE, sep ="," )
+
+```
+
+## Variable hacinamiento
+
+```{r}
+hac_2010 <- hac_2010 %>% 
+  filter(Hacinamiento=="Más de  3.00 personas por cuarto") %>% 
+  mutate(hc_total = Casa_A + viv_Departamento)
+
+hac_2022 <- hac_2022 %>% 
+  filter(Hacinamiento=="6. Más de 3,00  personas por cuarto") %>% 
+  mutate(hc_total = Casa_A + viv_Departamento)
+```
+
+```{r}
+censo_2010 <- 
+```
+
+

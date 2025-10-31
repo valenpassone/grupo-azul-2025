@@ -7,8 +7,11 @@ output: html_document
 
 ```{r}
 library(tidyverse)
+library(writexl)
+library(sf)
+library(dplyr)
+library(ggplot2) 
 ```
-
 
 ##Descargamos bases 2010
 
@@ -25,7 +28,6 @@ hac_2010 <- read.csv("Bases/Censo 2022-2010/Censo2010_Hogares_Hac.csv", stringsA
 viv_habitadas_2010 <- read.csv("Bases/Censo 2022-2010/Censo2010_Viv_Habitadas.csv", stringsAsFactors = TRUE, sep ="," )
 
 pob_viv_hog_2010 <- read.csv("Bases/Censo 2022-2010/Censo2010_Pob_Viv_Hog.csv", stringsAsFactors = TRUE, sep ="," )
-
 ```
 
 ## Descargamos bases 2022
@@ -40,10 +42,9 @@ hac_2022 <- read.csv("Bases/Censo 2022-2010/Censo2022_Hogares_Hac.csv", stringsA
 viv_habitadas_2022 <- read.csv("Bases/Censo 2022-2010/Censo2022_Viv_Habitadas.csv", stringsAsFactors = TRUE, sep ="," )
 
 pob_viv_hog_2022 <- read.csv("Bases/Censo 2022-2010/Censo2022_Pob_Viv_Hog.csv", stringsAsFactors = TRUE, sep ="," )
-
 ```
 
-## Variable hacinamiento
+## Variable hacinamiento para ambas bases
 
 ```{r}
 hac_2010 <- hac_2010 %>% 
@@ -55,8 +56,297 @@ hac_2022 <- hac_2022 %>%
   mutate(hc_total = Casa_A + viv_Departamento)
 ```
 
+##Unir bases 2010
 ```{r}
-censo_2010 <- 
+censo_2010 <- left_join(pob_viv_hog_2010,defcuali_2010,
+                        by = c("Código", "Departamento"))
+
+censo_2010 <- left_join(censo_2010,hac_2010,
+                        by = c("Código", "Departamento"))
+
+censo_2010 <- left_join(censo_2010,viv_habitadas_2010,
+                        by = c("Código", "Departamento"))
 ```
 
+##Unir bases 2022
+
+```{r}
+censo_2022 <- left_join(pob_viv_hog_2022,defcuali_2022,
+                        by = c("Código", "Departamento"))
+
+censo_2022 <- left_join(censo_2022,hac_2022,
+                        by = c("Código", "Departamento"))
+
+censo_2022 <- left_join(censo_2022,viv_habitadas_2022,
+                        by = c("Código", "Departamento"))
+```
+
+Construimos las variables de déficit habitacional 
+
+```{r}
+censo_2010 <- censo_2010 %>% 
+  mutate(defhab_simple_10 = Hogares2010-VivHabitadas2010) %>%
+  mutate(defhab_compuesto_10 = defhab_simple_10 + Rancho + Casilla + Pieza.en.inquilinato+Pieza.en.hotel.familiar.o.pensión+Local.no.construido.para.habitación+Vivienda.móvil) %>% 
+  mutate(defhab_simple_pct_10 = (defhab_simple_10/Hogares2010)*100) %>% 
+  mutate(defhab_compuesto_pct_10 =(defhab_compuesto_10/Hogares2010)*100) %>% 
+  mutate(def_cuali_10 = (Hogares_ADptos_sinred2010+hc_total+Hogares_CasasB2010)- (Hogares_ADptos_hac_sinred2010)) %>% 
+  mutate(def_cuali_pct_10 = (def_cuali_10/Hogares2010)*100)
+
+
+censo_2022 <- censo_2022 %>% 
+  mutate(defhab_simple_22 = Hogares2022-VivHabitadas2022) %>%
+  mutate(defhab_compuesto_22 = defhab_simple_22 + Rancho + Casilla + Pieza.ocupada.en.inquilinato..hotel.familiar.o.pensión+Local.no.construido.para.habitación.ocupado+Vivienda.móvil.ocupada) %>% 
+  mutate(defhab_simple_pct_22 = (defhab_simple_22/Hogares2022)*100) %>% 
+  mutate(defhab_compuesto_pct_22 =(defhab_compuesto_22/Hogares2022)*100) %>% 
+  mutate(def_cuali_22 = (Hogares_ADptos_sinred2022+hc_total+Hogares_CasasB2022)- (Hogares_ADptos_hac_sinred2022)) %>% 
+  mutate(def_cuali_pct_22 = (def_cuali_22/Hogares2022)*100)
+```
+
+##Asignando el código provincia
+```{r}
+censo2010_prov <- censo_2010 %>%
+  mutate(Código = as.character(Código)) %>% 
+  mutate(Código = if_else(
+               nchar(Código) == 4,
+               paste0("0", Código),
+               Código)) %>%
+  mutate(Código_prov = substr(Código, 1, 2))
+
+cod_prov2010 <- cod_prov2010 %>% 
+  mutate(Código = as.character(Código)) %>% 
+  mutate(Código_prov = if_else(
+               nchar(Código) == 1,
+               paste0("0", Código),
+               Código))
+
+censo2010_prov <- left_join(censo2010_prov, cod_prov2010, by= ("Código_prov"))
+
+censo2022_prov <- censo_2022 %>%
+  mutate(Código = as.character(Código)) %>% 
+  mutate(Código = if_else(
+               nchar(Código) == 4,
+               paste0("0", Código),
+               Código)) %>%
+  mutate(Código_prov = substr(Código, 1, 2))
+
+cod_prov2022 <- cod_prov2022 %>% 
+  mutate(Código = as.character(Código)) %>% 
+  mutate(Código_prov = if_else(
+               nchar(Código) == 1,
+               paste0("0", Código),
+               Código))
+
+censo2022_prov <- left_join(censo2022_prov, cod_prov2022, by= ("Código_prov"))
+
+```
+
+##Agrupando por provincias
+
+```{r}
+censo2010_prov_group <- censo2010_prov %>% 
+  group_by(Provincia) %>% 
+  summarise(defhab_simple_10 =sum(defhab_simple_10, na.rm = TRUE),
+            defhab_compuesto_10=sum(defhab_compuesto_10, na.rm = TRUE),
+            def_cuali_10=sum(def_cuali_10, na.rm = TRUE),
+            Hogares2010 =sum(Hogares2010, na.rm = TRUE),
+            Viviendas2010 =sum(Viviendas2010, na.rm = TRUE)) %>% 
+  mutate(defhab_simple_pct_10 = (defhab_simple_10/Hogares2010)*100,
+         defhab_compuesto_pct_10 = (defhab_compuesto_10/Hogares2010)*100,
+         def_cuali_pct_10 = (def_cuali_10/Hogares2010)*100)
+```
+
+```{r}
+censo2022_prov_group <- censo2022_prov %>% 
+  group_by(Provincia) %>% 
+  summarise(defhab_simple_22 =sum(defhab_simple_22, na.rm = TRUE),
+            defhab_compuesto_22=sum(defhab_compuesto_22, na.rm = TRUE),
+            def_cuali_22=sum(def_cuali_22, na.rm = TRUE),
+            Hogares2022 =sum(Hogares2022, na.rm = TRUE),
+            Viviendas2022 =sum(Viviendas2022, na.rm = TRUE)) %>% 
+  mutate(defhab_simple_pct_22 = (defhab_simple_22/Hogares2022)*100,
+         defhab_compuesto_pct_22 = (defhab_compuesto_22/Hogares2022)*100,
+         def_cuali_pct_22 = (def_cuali_22/Hogares2022)*100)
+```
+
+##Uniendo bases y sacando la variación por provincia
+
+```{r}
+censo2010_2022_prov <- left_join(censo2010_prov_group,censo2022_prov_group,by= ("Provincia"))
+
+censo2010_2022_prov <- censo2010_2022_prov %>% 
+  mutate(var_def_compuesto = (((defhab_compuesto_pct_22 - defhab_compuesto_pct_10)/defhab_compuesto_pct_10)*100),
+         var_def_cuali = (((def_cuali_pct_22 - def_cuali_pct_10)/def_cuali_pct_10)*100))
+```
+
+Para matchear con bases georeferenciadas con provincia
+
+```{r}
+provincias <- st_read("Bases/provincias_argentina.gpkg",
+                         stringsAsFactors = TRUE)
+
+provincias$NAM <- as.character(provincias$NAM)
+```
+
+```{r}
+provincias <- provincias %>% 
+  mutate(NAM = case_when(NAM == "Ciudad Autónoma de Buenos Aires" ~ "CABA",
+                         NAM == "Tierra del Fuego, Antártida e Islas del Atlántico Sur" ~ "Tierra del Fuego", TRUE ~ NAM))
+```
+
+
+```{r}
+censo2010_prov_group_geo <- left_join(censo2010_prov_group, provincias, by = c("Provincia" = "NAM"))
+
+censo2022_prov_group_geo <- left_join(censo2022_prov_group, provincias, by = c("Provincia" = "NAM"))
+
+censo2010_2022_prov_geo <- left_join(censo2010_2022_prov, provincias, by = c("Provincia" = "NAM"))
+```
+
+
+Guardar el dato
+```{r}
+write_csv(censo_2010, file = "Censo2010.csv")
+
+write_csv(censo_2022, file = "Censo2022.csv")
+
+write_xlsx(censo2010_2022_prov, path = "Censo2010-2022.xlsx")
+
+st_write(censo2010_prov_group_geo, "Censo2010_prov.gpkg", delete_layer = TRUE)
+
+st_write(censo2022_prov_group_geo, "Censo2022_prov.gpkg", delete_layer = TRUE)
+
+st_write(censo2010_2022_prov_geo, "Censo2010_2022_geo.gpkg", delete_layer = TRUE)
+```
+
+##Gráficos
+
+```{r}
+graf_censo <- censo2010_2022_prov %>%
+  pivot_longer(
+    cols = ends_with("_pct_10") | ends_with("_pct_22"),
+    names_to = "col_temp", 
+    values_to = "Valor"
+  ) %>%
+  mutate(
+    Año = ifelse(str_detect(col_temp, "10$"), "2010", "2022"),
+    Déficit = str_extract(col_temp, "^defhab_simple|^defhab_compuesto|^def_cuali"),
+    Déficit = case_when(
+      Déficit == "defhab_simple" ~ "Simple",
+      Déficit == "defhab_compuesto" ~ "Compuesto",
+      Déficit == "def_cuali" ~ "Cualitativo",
+      TRUE ~ Déficit)
+  ) %>%  select(
+    Provincia, 
+    Déficit, 
+    Año, 
+    Valor)
+```
+
+
+```{r}
+df_cuali_graf <- graf_censo %>%
+  filter(Déficit == "Cualitativo") %>%
+  mutate(Año = as.factor(Año))
+
+ggplot(df_cuali_graf, aes(x = Año, y = Valor, fill = Año)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8)) +
+  facet_wrap(~ Provincia, ncol = 6) +
+  labs(
+    title = "Déficit Cualitativo (%) por Provincia: Comparativa 2010 vs 2022",
+    y = "Déficit Cualitativo (%)",
+    x = NULL,
+    fill = "Año"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(face = "bold", size = 14),
+    axis.text.x = element_text(angle = 45, hjust = 1) # Rota el texto del eje X para mejor lectura
+  ) + scale_fill_brewer(palette = "Pastel1")
+  
+```
+
+```{r}
+df_comp_graf <- graf_censo %>%
+  filter(Déficit == "Compuesto") %>%
+  mutate(Año = as.factor(Año))
+
+ggplot(df_comp_graf, aes(x = Año, y = Valor, fill = Año)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8)) +
+  facet_wrap(~ Provincia, ncol = 6) +
+  labs(
+    title = "Déficit Cuantitativo Compuesto (%) por Provincia: Comparativa 2010 vs 2022",
+    y = "Déficit Cuantitativo Compuesto (%)",
+    x = NULL,
+    fill = "Año"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(face = "bold", size = 14),
+    axis.text.x = element_text(angle = 45, hjust = 1) # Rota el texto del eje X para mejor lectura
+  )
+```
+
+
+##SANTIAGO DEL ESTERO
+
+Cantidad de personas que viven en esa provincia
+Densidad de barrios populares
+
+```{r}
+
+```
+
+```{r}
+santiago_2010 <- filter(censo2010_prov, Provincia == "Santiago del Estero")
+
+santiago_2010 <- santiago_2010 %>% 
+  rename(cod_dpto = Código.x ) %>% 
+  select(cod_dpto,Departamento,defhab_compuesto_pct_10,def_cuali_pct_10)
+
+santiago_2022 <- filter(censo2022_prov, Provincia == "Santiago del Estero")
+
+santiago_2022 <- santiago_2022 %>% 
+  rename(cod_dpto = Código.x ) %>% 
+  select(cod_dpto,Departamento,defhab_compuesto_pct_22,def_cuali_pct_22)
+
+santiago_2010_2022 <- left_join(santiago_2010,santiago_2022, by = c("cod_dpto"))
+
+santiago_2010_2022 <- santiago_2010_2022 %>%
+  rename(Departamento = Departamento.x ) %>% 
+  select(cod_dpto,Departamento,defhab_compuesto_pct_10,def_cuali_pct_10,defhab_compuesto_pct_22,def_cuali_pct_22)
+
+```
+
+##Base RENABAP
+
+```{r}
+RENABAP <- read.csv("Bases/Renabap/20231205_info_publica_datos_barrios.csv", stringsAsFactors = TRUE, sep = ",")
+
+santiago_renabap <- filter(RENABAP, provincia == "Santiago del Estero")
+```
+
+```{r}
+renabap_prov <- RENABAP %>% 
+  filter(decada_de_creacion=="Década 2010") %>% 
+  group_by(provincia) %>% 
+  summarise(viv_bp = sum(cantidad_viviendas_aproximadas))
+
+renabap_prov <- renabap_prov %>% 
+  mutate(provincia = case_when(provincia == "Ciudad Autónoma de Buenos Aires" ~ "CABA",
+                          TRUE ~ provincia))
+
+renabap_prov <- left_join(renabap_prov, censo2010_prov_group, 
+                          by = c("provincia" = "Provincia"))
+
+renabap_prov <- left_join(renabap_prov, censo2022_prov_group, 
+                          by = c("provincia" = "Provincia"))
+
+
+renabap_prov <- renabap_prov %>% 
+  mutate(var_viv = (Viviendas2022-Viviendas2010),
+    viv_bp_pr = (viv_bp/var_viv)*100)
+
+write_csv(renabap_prov, file = "Bases/RENABAP_PROV.csv")
+
+```
 

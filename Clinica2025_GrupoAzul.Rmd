@@ -11,6 +11,10 @@ library(writexl)
 library(sf)
 library(dplyr)
 library(ggplot2) 
+library(tidyr)
+library(stringr)
+library(scales)
+library(gt)
 ```
 
 ##Descargamos bases 2010
@@ -151,6 +155,7 @@ censo2010_prov_group <- censo2010_prov %>%
   summarise(defhab_simple_10 =sum(defhab_simple_10, na.rm = TRUE),
             defhab_compuesto_10=sum(defhab_compuesto_10, na.rm = TRUE),
             def_cuali_10=sum(def_cuali_10, na.rm = TRUE),
+            Poblacion2010 =sum(Poblacion2010, na.rm = TRUE),
             Hogares2010 =sum(Hogares2010, na.rm = TRUE),
             Viviendas2010 =sum(Viviendas2010, na.rm = TRUE)) %>% 
   mutate(defhab_simple_pct_10 = (defhab_simple_10/Hogares2010)*100,
@@ -164,6 +169,7 @@ censo2022_prov_group <- censo2022_prov %>%
   summarise(defhab_simple_22 =sum(defhab_simple_22, na.rm = TRUE),
             defhab_compuesto_22=sum(defhab_compuesto_22, na.rm = TRUE),
             def_cuali_22=sum(def_cuali_22, na.rm = TRUE),
+            Poblacion2022 =sum(Poblacion2022, na.rm = TRUE),
             Hogares2022 =sum(Hogares2022, na.rm = TRUE),
             Viviendas2022 =sum(Viviendas2022, na.rm = TRUE)) %>% 
   mutate(defhab_simple_pct_22 = (defhab_simple_22/Hogares2022)*100,
@@ -189,14 +195,12 @@ provincias <- st_read("Bases/provincias_argentina.gpkg",
 
 provincias$NAM <- as.character(provincias$NAM)
 
-```
-
-```{r}
 provincias <- provincias %>% 
   mutate(NAM = case_when(NAM == "Ciudad Autónoma de Buenos Aires" ~ "CABA",
                          NAM == "Tierra del Fuego, Antártida e Islas del Atlántico Sur" ~ "Tierra del Fuego", TRUE ~ NAM))
-```
 
+```
+##Agregando datos georreferenciados a las bases
 
 ```{r}
 censo2010_prov_group_geo <- left_join(censo2010_prov_group, provincias, by = c("Provincia" = "NAM"))
@@ -207,7 +211,8 @@ censo2010_2022_prov_geo <- left_join(censo2010_2022_prov, provincias, by = c("Pr
 ```
 
 
-Guardar el dato
+##Guardando las bases para trabajarlas QGIS
+
 ```{r}
 write_csv(censo_2010, file = "Censo2010.csv")
 
@@ -223,6 +228,7 @@ st_write(censo2010_2022_prov_geo, "Censo2010_2022_geo.gpkg", delete_layer = TRUE
 ```
 
 ##Gráficos
+#Generamos las bases y variables que necesitamos para gráficar
 
 ```{r}
 graf_censo <- censo2010_2022_prov %>%
@@ -246,6 +252,7 @@ graf_censo <- censo2010_2022_prov %>%
     Valor)
 ```
 
+#Gráfico variación déficit cualitativo
 
 ```{r}
 df_cuali_graf <- graf_censo %>%
@@ -265,7 +272,7 @@ ggplot(df_cuali_graf, aes(x = Año, y = Valor, fill = Año)) +
   theme(
     plot.title = element_text(face = "bold", size = 14),
     axis.text.x = element_text(angle = 45, hjust = 1) # Rota el texto del eje X para mejor lectura
-  ) + scale_fill_brewer(palette = "Pastel1")
+  ) + scale_fill_manual(values = c("grey","grey5"))
   
 ```
 
@@ -287,14 +294,69 @@ ggplot(df_comp_graf, aes(x = Año, y = Valor, fill = Año)) +
   theme(
     plot.title = element_text(face = "bold", size = 14),
     axis.text.x = element_text(angle = 45, hjust = 1) # Rota el texto del eje X para mejor lectura
+  ) + scale_fill_manual(values = c("grey","grey5"))
+```
+
+```{r}
+df_variacion_graf <- censo2010_2022_prov %>%
+  select(Provincia, var_def_compuesto, var_def_cuali) %>%
+  pivot_longer(
+    cols = c(var_def_compuesto, var_def_cuali),
+    names_to = "Tipo_Variacion",
+    values_to = "Valor"
+  ) %>%
+  mutate(
+    # Primero, creamos los nombres
+    Tipo_Variacion = case_when(
+      Tipo_Variacion == "var_def_compuesto" ~ "Var. Déficit Cuantitativo Compuesto",
+      Tipo_Variacion == "var_def_cuali" ~ "Var. Déficit Cualitativo",
+      TRUE ~ Tipo_Variacion
+    ),
+    
+    # --- CAMBIO AQUÍ ---
+    # Segundo, redefinimos la columna como un factor con el orden deseado
+    Tipo_Variacion = factor(Tipo_Variacion, levels = c(
+      "Var. Déficit Cuantitativo Compuesto", 
+      "Var. Déficit Cualitativo"
+    ))
   )
+
+ggplot(df_variacion_graf, aes(x = Tipo_Variacion, y = Valor, fill = Tipo_Variacion)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8)) +
+  facet_wrap(~ Provincia, ncol = 6) +
+  labs(
+    title = "Variación del Déficit (%) por Provincia: Cuantitativo vs Cualitativo (2010-2022)",
+    y = "Variación Porcentual (%)",
+    x = NULL, # Ocultamos el título del eje X
+    fill = "Tipo de Variación" # Título de la leyenda
+  ) +
+  
+  # Usamos el tema minimalista
+  theme_minimal() +
+  
+  # Aplicamos los estilos
+  theme(
+    plot.title = element_text(face = "bold", size = 14),
+    
+    # --- CAMBIO AQUÍ ---
+    # Ocultamos el texto del eje X
+    axis.text.x = element_blank(), 
+    # También ocultamos las "marquitas" (ticks) del eje X para que quede más limpio
+    axis.ticks.x = element_blank(), 
+    
+    legend.position = "bottom" # Mantenemos la leyenda abajo
+  ) +
+  
+  # Aplicamos la misma paleta de colores
+  scale_fill_manual(values = c("grey","grey5")) +
+  
+  # Añadimos una línea en y=0 para ver más fácil el crecimiento/decrecimiento
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey40")
+
 ```
 
 
 ##SANTIAGO DEL ESTERO
-
-Cantidad de personas que viven en esa provincia
-Densidad de barrios populares
 
 ```{r}
 santiago_2010 <- filter(censo2010_prov, Provincia == "Santiago del Estero")
@@ -368,7 +430,6 @@ ggplot()+
  coord_sf()
 ```
 
-
 ```{r}
 st_write(santiago_2010_2022_geo, "Bases georreferenciadas/Santiago2010_2022_geo.gpkg", delete_layer = TRUE)
 ```
@@ -405,5 +466,216 @@ renabap_prov <- renabap_prov %>%
 
 write_csv(renabap_prov, file = "Bases/RENABAP_PROV.csv")
 
+```
+
+##Más gráficos de Santiago
+
+```{r}
+# Preparamos los datos para el gráfico de líneas
+df_lineas_sde <- censo2010_2022_prov %>%
+  
+  # ... (select y pivot_longer como antes) ...
+  select(Provincia, 
+         Poblacion2010, Poblacion2022, 
+         Hogares2010, Hogares2022, 
+         Viviendas2010, Viviendas2022) %>%
+  pivot_longer(
+    cols = -Provincia,
+    names_to = "col_temp",
+    values_to = "Valor"
+  ) %>%
+  mutate(
+    Año = if_else(str_detect(col_temp, "2010$"), "2010", "2022"),
+    Tipo = str_remove(col_temp, "2010|2022"),
+    Tipo = if_else(Tipo == "Poblacion", "Población", Tipo),
+    
+    # --- CAMBIO AQUÍ ---
+    # Convertimos 'Tipo' a factor con el orden deseado
+    Tipo = factor(Tipo, levels = c("Población", "Hogares", "Viviendas")) 
+  ) %>%
+  
+  # Filtramos por la provincia
+  filter(Provincia == "Santiago del Estero")
+
+ggplot(df_lineas_sde, aes(x = Año, y = Valor)) +
+  
+  geom_line(aes(group = Provincia), 
+            color = "grey50", 
+            linewidth = 1) +     
+  
+  geom_point(aes(color = Año), 
+             size = 3) +       
+  
+  expand_limits(y = 0) +
+  
+  # El facet ahora usará el orden del factor "Tipo"
+  facet_wrap(~ Tipo, scales = "free_y") +
+  
+  labs(
+    title = "Evolución de Población, Hogares y Viviendas (2010-2022)",
+    subtitle = "Provincia: Santiago del Estero",
+    y = "Cantidad Total",
+    x = NULL,
+    color = "Año"
+  ) +
+  
+  scale_color_manual(values = c("grey","grey5")) +
+  
+  scale_y_continuous(
+    labels = label_comma(),
+    expand = expansion(mult = c(0, 0.5)) 
+  ) +
+  
+  theme_minimal() +
+  
+  theme(
+    plot.title = element_text(face = "bold", size = 14),
+    plot.subtitle = element_text(size = 12),
+    legend.position = "bottom",
+    strip.text = element_text(face = "bold", size = 11),
+    
+    # Añadimos un fondo al título de la faceta
+    strip.background = element_rect(fill = "grey90", color = "grey50"),
+    
+    # Añadimos el borde alrededor de cada panel (faceta)
+    panel.border = element_rect(color = "grey50", fill = NA) 
+  )
+```
+
+```{r}
+# 1. Creamos una tabla temporal solo con los valores base de 2010
+base_2010 <- df_lineas_sde %>%
+  filter(Año == "2010") %>%
+  select(Tipo, Valor_Base = Valor) # Renombramos Valor para el join
+
+# 2. Unimos la base original con los valores base y calculamos el índice
+df_indexado <- df_lineas_sde %>%
+  
+  # Unimos por 'Tipo' (Población, Hogares, Viviendas)
+  left_join(base_2010, by = "Tipo") %>%
+  
+  # Calculamos el índice: (Valor_Actual / Valor_Base) * 100
+  mutate(Indice = (Valor / Valor_Base) * 100)
+
+ggplot(df_indexado, 
+       # Mapeos principales: 
+       # Y = Indice
+       # color = Tipo (para diferenciar las 3 líneas)
+       aes(x = Año, y = Indice, color = Tipo, group = Tipo)) +
+  
+  # --- LÍNEA BASE ---
+  # Añadimos una línea punteada en 100 (nuestro punto de partida)
+  geom_hline(yintercept = 100, linetype = "dashed", color = "grey40") +
+  
+  # Líneas y Puntos
+  geom_line(linewidth = 1.2) +
+  geom_point(size = 3.5) +
+  
+  # Títulos
+  labs(
+    title = "Crecimiento Relativo de Variables (2010-2022)",
+    subtitle = "Santiago del Estero (Índice: Año 2010 = 100)",
+    y = "Índice (Base 100)",
+    x = NULL,
+    color = "Variable" # Título de la leyenda
+  ) +
+  
+  # Paleta de colores
+  # (usará la misma 'Pastel1' pero para las 3 variables)
+  scale_color_manual(values = c("gray70","gray0", "gray35")) +
+  
+  # Ajustamos la escala Y para dar espacio, 
+  # pero nos aseguramos de que el 100 esté centrado
+  scale_y_continuous(expand = expansion(mult = c(0.1, 0.1))) +
+  
+  # Mismos temas estéticos
+  theme_minimal() +
+  theme(
+    plot.title = element_text(face = "bold", size = 14),
+    plot.subtitle = element_text(size = 12),
+    legend.position = "bottom"
+  )
+```
+
+##Tablas de rankings de provincias
+
+```{r}
+df_tabla_bajos <- censo2010_2022_prov %>%
+  select(Provincia, var_def_compuesto) %>%
+  arrange(var_def_compuesto) %>%
+  slice_head(n = 5)
+
+tabla_bajos_compuesto <- df_tabla_bajos %>%
+  gt() %>%
+  
+  tab_header(
+    title = "Provincias con mayor variación de déficit habitacional cuantitativo",
+    subtitle = "Período 2010-2022"
+  ) %>%
+  
+  cols_label(
+    Provincia = "Provincia",
+    var_def_compuesto = "Variación (%)"
+  ) %>%
+  
+  fmt_percent(
+    columns = var_def_compuesto,
+    scale_values = FALSE,
+    decimals = 2
+  ) %>%
+
+  cols_align(
+    align = "center",
+    columns = var_def_compuesto
+  ) %>%
+  
+  tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_title(groups = "title")
+  ) %>%
+  
+  opt_stylize(style = 6, color = "gray")
+
+tabla_bajos_compuesto
+```
+
+```{r}
+df_tabla_altos <- censo2010_2022_prov %>%
+  select(Provincia, var_def_cuali) %>%
+  arrange(desc(var_def_cuali)) %>%
+  slice_head(n = 5)
+
+tabla_altos_cuali <- df_tabla_altos %>%
+  gt() %>%
+  
+  tab_header(
+    title = "Provincias con menor variación de déficit habitacional cualitativo",
+    subtitle = "Período 2010-2022"
+  ) %>%
+  
+  cols_label(
+    Provincia = "Provincia",
+    var_def_cuali = "Variación (%)"
+  ) %>%
+  
+  fmt_percent(
+    columns = var_def_cuali,
+    scale_values = FALSE,
+    decimals = 2
+  ) %>%
+  
+  cols_align(
+    align = "center",
+    columns = var_def_cuali
+  ) %>%
+
+  tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_title(groups = "title")
+  ) %>%
+  
+  opt_stylize(style = 6, color = "gray")
+
+tabla_altos_cuali
 ```
 

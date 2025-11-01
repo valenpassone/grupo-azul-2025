@@ -17,7 +17,7 @@ library(scales)
 library(gt)
 ```
 
-### Preparación de dataframes y procesamiento de datos
+### **Preparación de dataframes y procesamiento de datos**
 
 **Descargamos bases 2010:**
 
@@ -411,7 +411,7 @@ tabla_altos_cuali <- df_tabla_altos %>%
 tabla_altos_cuali
 ```
 
-### Análisis de caso: Santiago del Estero
+### **Análisis de caso: Santiago del Estero**
 
 ```{r}
 santiago_2010 <- filter(censo2010_prov, Provincia == "Santiago del Estero")

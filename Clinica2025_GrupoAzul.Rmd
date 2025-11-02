@@ -17,7 +17,7 @@ library(scales)
 library(gt)
 ```
 
-### **Preparación de dataframes y procesamiento de datos**
+### **Preparación de dataframes y procesamiento de datos Censos 2010  y 2022**
 
 **Descargamos bases 2010:**
 
@@ -110,7 +110,7 @@ censo_2022 <- censo_2022 %>%
 
 ```
 
-*Se asigno el código de provincia* *a las bases por departamento:*
+*Se asigno el código de provincia a las bases por departamento:*
 
 ```{r}
 censo2010_prov <- censo_2010 %>%
@@ -165,6 +165,17 @@ censo2010_prov_group <- censo2010_prov %>%
          def_cuali_pct_10 = (def_cuali_10/Hogares2010)*100)
 ```
 
+*Se calculó la media nacional de déficit cuantitativo compuesto y cualitativo para 2010:*
+
+```{r}
+mean(censo2010_prov_group$defhab_compuesto_pct_10)
+```
+
+```{r}
+mean(censo2010_prov_group$def_cuali_pct_10)
+```
+*Se repitieron los mismos procesos para la base de 2022:*
+
 ```{r}
 censo2022_prov_group <- censo2022_prov %>% 
   group_by(Provincia) %>% 
@@ -179,6 +190,18 @@ censo2022_prov_group <- censo2022_prov %>%
          def_cuali_pct_22 = (def_cuali_22/Hogares2022)*100)
 ```
 
+*Media nacional déficit cuantitativo compuesto 2022:*
+
+```{r}
+mean(censo2022_prov_group$defhab_compuesto_pct_22)
+```
+
+*Media nacional déficit cualitativo 2022:*
+
+```{r}
+mean(censo2022_prov_group$def_cuali_pct_22)
+```
+
 *Se unieron las bases y se generó una nueva variable que identifique la variación intercensal:*
 
 ```{r}
@@ -187,6 +210,16 @@ censo2010_2022_prov <- left_join(censo2010_prov_group,censo2022_prov_group,by= (
 censo2010_2022_prov <- censo2010_2022_prov %>% 
   mutate(var_def_compuesto = (((defhab_compuesto_pct_22 - defhab_compuesto_pct_10)/defhab_compuesto_pct_10)*100),
          var_def_cuali = (((def_cuali_pct_22 - def_cuali_pct_10)/def_cuali_pct_10)*100))
+```
+
+*Se calcularon las medias de las variaciones intercensales:*
+
+```{r}
+mean(censo2010_2022_prov$var_def_compuesto)
+```
+
+```{r}
+mean(censo2010_2022_prov$var_def_cuali)
 ```
 
 *Para realizar mapas se bajaron las bases georeferenciadas por provincia y por departamento. Se realizaron los cambios necesarios para poder matchear:*
@@ -203,7 +236,7 @@ provincias <- provincias %>%
 
 ```
 
-*Se agregaron* *los datos georreferenciados a las bases:*
+*Se agregaron los datos georreferenciados a las bases:*
 
 ```{r}
 censo2010_prov_group_geo <- left_join(censo2010_prov_group, provincias, by = c("Provincia" = "NAM"))
@@ -262,7 +295,7 @@ write_csv(renabap_prov, file = "Bases/RENABAP_PROV.csv")
 
 ```
 
-### **Gráficos**
+### **Gráficos Censos 2010 y 2022 - País**
 
 *Se realizaron las adecuaciones necesarias para el gráfico deseado:*
 
@@ -413,6 +446,8 @@ tabla_altos_cuali
 
 ### **Análisis de caso: Santiago del Estero**
 
+*Con la función filter () se seleccionaron únicamente los departamentos de Santiago del Estero*
+
 ```{r}
 santiago_2010 <- filter(censo2010_prov, Provincia == "Santiago del Estero")
 
@@ -433,7 +468,35 @@ santiago_2010_2022 <- santiago_2010_2022 %>%
   select(cod_dpto,Departamento,defhab_compuesto_pct_10,def_cuali_pct_10,defhab_compuesto_pct_22,def_cuali_pct_22)
 ```
 
-**Gráfico Evolución de población, hogares y viviendas (Santiago del Estero):**
+```{r}
+mean(santiago_2010_2022$defhab_compuesto_pct_10)
+```
+```{r}
+mean(santiago_2010_2022$defhab_compuesto_pct_22)
+```
+```{r}
+mean(santiago_2010_2022$def_cuali_pct_10, na.rm = TRUE)
+```
+```{r}
+mean(santiago_2010_2022$defhab_compuesto_pct_22)
+```
+
+*Se crearon las variables para calcular la variación intercensal:*
+
+```{r}
+santiago_2010_2022 <- santiago_2010_2022 %>% 
+  mutate(var_def_compuesto = (((defhab_compuesto_pct_22 - defhab_compuesto_pct_10)/defhab_compuesto_pct_10)*100),
+         var_def_cuali = (((def_cuali_pct_22 - def_cuali_pct_10)/def_cuali_pct_10)*100))
+
+```
+
+```{r}
+mean(santiago_2010_2022$var_def_compuesto)
+```
+```{r}
+mean(santiago_2010_2022$var_def_cuali, na.rm =TRUE)
+```
+**Gráfico Evolución de población, hogares y viviendas:**
 
 ```{r}
 df_lineas_sde <- censo2010_2022_prov %>%
@@ -523,10 +586,6 @@ santiago_2010_2022 <- santiago_2010_2022 %>%
                                   Departamento == "Juan F. Ibarra" ~ "Juan Felipe Ibarra",
                           TRUE ~ Departamento))
 
-santiago_2010_2022 <- santiago_2010_2022 %>% 
-  mutate(var_def_compuesto = (((defhab_compuesto_pct_22 - defhab_compuesto_pct_10)/defhab_compuesto_pct_10)*100),
-         var_def_cuali = (((def_cuali_pct_22 - def_cuali_pct_10)/def_cuali_pct_10)*100))
-
 santiago_2010_2022_geo <- left_join(departamento, santiago_2010_2022, by = c("departamen" = "Departamento", "Código2010" = "cod_dpto"))
 
 santiago_2010_2022_geo <- filter(santiago_2010_2022_geo,provincia == "Santiago del Estero")
@@ -560,6 +619,8 @@ ggplot()+
   theme(plot.title = element_text(face="bold", size= 14, color="black", hjust = 0.5), plot.caption = element_text(face="italic", hjust = 0.5))+
  coord_sf()
 ```
+
+*Descarga de bases para el uso de QGIS:*
 
 ```{r}
 st_write(santiago_2010_2022_geo, "Bases georreferenciadas/Santiago2010_2022_geo.gpkg", delete_layer = TRUE)
